@@ -1,0 +1,22 @@
+{
+  "name": "AsiteAIAssets",
+  "owner": {
+    "name": "Jayraj Chocha",
+    "email": "jchocha@asite.com"
+  },
+  "metadata": {
+    "description": "Private marketplace hosting my custom Claude Code plugins.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "review-pilot",
+      "source": "./plugins/review-pilot",
+      "description": "Review the code based on role and apply the fixes after approval",
+      "version": "1.0.0",
+      "author": {
+        "name": "Jayraj Chocha"
+      }
+    }
+  ]
+}

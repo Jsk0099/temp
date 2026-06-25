@@ -1,0 +1,11 @@
+{
+  "name": "review-pilot",
+  "version": "1.0.0",
+  "description": "Review the code based on role, provide solutions and apply after approval.",
+  "author": {
+    "name": "Jayraj Chocha",
+    "email": "jchocha@asite.com"
+  },
+  "homepage": "https://asite.com",
+  "keywords": ["agents", "skills", "productivity"]
+}

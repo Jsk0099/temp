@@ -1,0 +1,16 @@
+{
+  "name": "reviewpilot",
+  "version": "1.0.0",
+  "description": "AI branch code reviewer — wraps Claude CLI via spawn",
+  "main": "server.js",
+  "private": true,
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-code": "^2.1.178"
+  }
+}

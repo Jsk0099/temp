@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "write",
+      "Grep",
+      "Glob",
+      "Bash(git diff:*)",
+      "Bash(git status:*)",
+      "Bash(npm run test:*)"
+    ],
+    "deny": [
+      "Bash(rm -rf:*)",
+      "Read(./.env)",
+      "Read(./secrets/**)"
+    ],
+    "ask": [
+      "Bash(git push:*)"
+    ]
+  },
+  "enabledPlugins": ["review-pilot@AsiteAIAssets"]
+}

@@ -1,0 +1,1389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Review Pilot — Review Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0f1a;
+    --panel: #10182a;
+    --panel-2: #16213a;
+    --sidebar: #0c1426;
+    --line: #243352;
+    --line-soft: #1b2740;
+    --ink: #e8eefb;
+    --ink-dim: #93a4c8;
+    --ink-faint: #5e6f93;
+    --amber: #ffb547;
+    --cyan: #38e1d6;
+    --blue: #4d8bff;
+    --green: #54d98c;
+    --red: #ff6b6b;
+    --violet: #b78bff;
+    --display: "Chakra Petch", sans-serif;
+    --body: "IBM Plex Sans", sans-serif;
+    --mono: "IBM Plex Mono", monospace;
+    --radius: 14px;
+    --sb-width: 278px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body {
+    font-family: var(--body);
+    color: var(--ink);
+    background:
+      radial-gradient(1200px 600px at 85% -5%, rgba(56,225,214,0.09), transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, rgba(77,139,255,0.11), transparent 55%),
+      var(--bg);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .grain {
+    position: fixed; inset: 0; pointer-events: none; opacity: 0.035; z-index: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* ── Sidebar ──────────────────────────────────────────────── */
+  .sidebar {
+    position: fixed; left: 0; top: 0; bottom: 0; width: var(--sb-width);
+    background: linear-gradient(180deg, #0e1a30 0%, var(--sidebar) 100%);
+    border-right: 1px solid var(--line);
+    z-index: 20;
+    display: flex; flex-direction: column;
+    overflow-y: auto;
+  }
+
+  /* Header block inside sidebar */
+  .sb-hd {
+    padding: 20px 18px 16px;
+    border-bottom: 1px solid var(--line);
+    background: linear-gradient(180deg, rgba(56,225,214,0.07), transparent 80%);
+    flex: none;
+  }
+  .sb-logo-row { display: flex; align-items: center; gap: 11px; margin-bottom: 10px; }
+  .sb-logo {
+    width: 38px; height: 38px; flex: none; border-radius: 10px;
+    background: linear-gradient(135deg, #14203a, #0b1322);
+    border: 1px solid var(--line);
+    display: grid; place-items: center;
+    box-shadow: inset 0 0 18px rgba(56,225,214,0.12);
+  }
+  .sb-logo svg { width: 22px; height: 22px; }
+  .sb-title { flex: 1; }
+  .sb-title h1 { font-family: var(--display); font-weight: 700; font-size: 18px; letter-spacing: 0.04em; margin: 0; text-transform: uppercase; line-height: 1.1; }
+  .sb-title h1 b { color: var(--cyan); font-weight: 700; }
+  .badge {
+    font-family: var(--mono); font-size: 9.5px; color: var(--amber);
+    border: 1px solid rgba(255,181,71,0.35); background: rgba(255,181,71,0.07);
+    padding: 3px 8px; border-radius: 999px; letter-spacing: 0.08em; text-transform: uppercase;
+    white-space: nowrap; align-self: flex-start;
+  }
+  .sb-hd-desc { font-size: 11px; color: var(--ink-faint); line-height: 1.4; }
+
+  /* Generic sidebar section */
+  .sb-sec {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--line-soft);
+    flex: none;
+  }
+  .sb-sec:last-child { border-bottom: none; flex: 1; }
+  .sb-sec-label {
+    font-family: var(--display); font-size: 10px; letter-spacing: 0.16em;
+    text-transform: uppercase; color: var(--ink-faint);
+    margin-bottom: 10px; display: flex; align-items: center; gap: 7px;
+  }
+  .sb-sec-label .dot { width: 5px; height: 5px; border-radius: 50%; }
+
+  /* Server status */
+  .srv-row { display: flex; align-items: center; gap: 9px; }
+  .srv-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-faint); flex: none; }
+  .srv-dot.ok   { background: var(--green);  box-shadow: 0 0 7px var(--green); }
+  .srv-dot.err  { background: var(--red);    box-shadow: 0 0 7px var(--red);   }
+  .srv-dot.done { background: var(--violet); box-shadow: 0 0 7px var(--violet); }
+  .srv-label { font-family: var(--mono); font-size: 12px; }
+  .srv-cwd { font-family: var(--mono); font-size: 10.5px; color: var(--ink-faint); margin-top: 7px; word-break: break-all; line-height: 1.4; }
+  .srv-err-msg { margin-top: 7px; font-size: 11.5px; color: var(--red); line-height: 1.5; }
+
+  /* Launch button */
+  .launch {
+    width: 100%; cursor: pointer; border: none; border-radius: 10px; padding: 13px;
+    font-family: var(--display); font-weight: 700; font-size: 13px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: #06131b;
+    background: linear-gradient(135deg, var(--cyan), #2bb4ab);
+    box-shadow: 0 10px 26px -10px rgba(56,225,214,0.55);
+    transition: transform .12s, filter .15s;
+  }
+  .launch:hover  { filter: brightness(1.07); transform: translateY(-1px); }
+  .launch:active { transform: translateY(0); }
+  .launch:disabled { opacity: .45; cursor: not-allowed; filter: grayscale(.4); transform: none; }
+  .hint { color: var(--red); font-size: 11.5px; margin-top: 8px; min-height: 15px; line-height: 1.4; }
+  .stop-all {
+    width: 100%; cursor: pointer; margin-top: 9px;
+    border: 1px solid rgba(255,107,107,0.38); border-radius: 10px; padding: 10px 13px;
+    font-family: var(--display); font-weight: 700; font-size: 12px; letter-spacing: 0.09em;
+    text-transform: uppercase; color: var(--red); background: rgba(255,107,107,0.06);
+    transition: background .15s, border-color .15s, transform .1s;
+  }
+  .stop-all:hover:not(:disabled) { background: rgba(255,107,107,0.16); border-color: rgba(255,107,107,0.65); transform: translateY(-1px); }
+  .stop-all:active:not(:disabled) { background: rgba(255,107,107,0.24); transform: translateY(0); }
+  .stop-all:disabled { opacity: .3; cursor: not-allowed; }
+
+  /* Live steps */
+  .steps { list-style: none; margin: 0; padding: 0; }
+  .step { display: flex; gap: 11px; padding: 10px 0; border-bottom: 1px dashed var(--line); opacity: .38; transition: opacity .3s; }
+  .step:last-child { border-bottom: none; }
+  .step.active, .step.done, .step.waiting { opacity: 1; }
+  .step .mark {
+    flex: none; width: 24px; height: 24px; border-radius: 50%;
+    border: 1px solid var(--line); display: grid; place-items: center;
+    font-family: var(--mono); font-size: 10px; color: var(--ink-faint); transition: all .25s;
+  }
+  .step.active  .mark { border-color: var(--amber); color: var(--amber); animation: pulse-amber 1s infinite; }
+  .step.done    .mark { border-color: var(--green); color: var(--green); background: rgba(84,217,140,0.12); }
+  .step.err     .mark { border-color: var(--red);   color: var(--red);   background: rgba(255,107,107,0.12); }
+  .step.waiting .mark { border-color: var(--cyan);  color: var(--cyan);  animation: pulse-cyan 1.3s infinite; }
+  .step.err { opacity: 1; }
+  @keyframes pulse-amber { 0%,100%{box-shadow:0 0 4px rgba(255,181,71,0.3);}50%{box-shadow:0 0 14px rgba(255,181,71,0.7);} }
+  @keyframes pulse-cyan  { 0%,100%{box-shadow:0 0 4px rgba(56,225,214,0.3);}50%{box-shadow:0 0 16px rgba(56,225,214,0.8);} }
+  .step .body .t { font-size: 12.5px; font-weight: 600; }
+  .step .body .d { font-size: 11px; color: var(--ink-faint); margin-top: 2px; line-height: 1.4; }
+  .step.active  .body .d { color: var(--ink-dim); }
+  .step.waiting .body .d { color: var(--cyan); }
+
+  /* ── Main scrollable area ─────────────────────────────────── */
+  .main {
+    margin-left: var(--sb-width);
+    height: 100vh;
+    overflow-y: auto;
+    padding: 26px 30px 60px;
+    position: relative; z-index: 1;
+  }
+
+  /* Content grid for form panels */
+  .form-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 860px) { .form-grid { grid-template-columns: 1fr; } }
+
+  /* Panel */
+  .panel {
+    background: linear-gradient(180deg, var(--panel), var(--panel-2));
+    border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 20px 22px;
+    box-shadow: 0 16px 36px -24px rgba(0,0,0,0.75);
+  }
+  .panel-hd {
+    font-family: var(--display); font-size: 12px; letter-spacing: 0.16em;
+    text-transform: uppercase; color: var(--ink-dim);
+    margin: 0 0 16px; display: flex; align-items: center; gap: 9px;
+  }
+  .panel-hd .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 9px var(--cyan); }
+
+  /* Form fields */
+  label.fld { display: block; margin-bottom: 17px; }
+  label.fld:last-child { margin-bottom: 0; }
+  .fld > span.lab { display: block; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 6px; font-weight: 600; }
+  .roles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .role { cursor: pointer; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,0.015); padding: 10px 8px; text-align: center; transition: all .16s ease; user-select: none; }
+  .role:hover { border-color: var(--blue); transform: translateY(-1px); }
+  .role .ic { font-size: 17px; }
+  .role .nm { font-size: 11px; margin-top: 4px; color: var(--ink-dim); font-weight: 600; }
+  .role.on { border-color: var(--cyan); background: rgba(56,225,214,0.10); box-shadow: inset 0 0 0 1px rgba(56,225,214,0.35); }
+  .role.on .nm { color: var(--cyan); }
+  input[type="text"], textarea {
+    width: 100%; background: #0b1220; border: 1px solid var(--line);
+    color: var(--ink); border-radius: 9px; padding: 10px 12px;
+    font-family: var(--mono); font-size: 13px; outline: none; transition: border-color .15s;
+  }
+  input[type="text"]:focus, textarea:focus { border-color: var(--cyan); }
+  textarea { resize: vertical; min-height: 72px; line-height: 1.5; }
+  ::placeholder { color: var(--ink-faint); }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+  .chip { font-family: var(--mono); font-size: 11.5px; padding: 3px 8px 3px 10px; border-radius: 999px; background: rgba(77,139,255,0.10); border: 1px solid rgba(77,139,255,0.4); color: #bcd2ff; display: inline-flex; align-items: center; gap: 5px; }
+  .chip b { cursor: pointer; color: #7fa6ff; font-weight: 700; }
+  .chip b:hover { color: var(--red); }
+  .chip-skip { background: rgba(255,107,107,0.08); border-color: rgba(255,107,107,0.38); color: #ffb0b0; }
+  .chip-skip b { color: #ff9090; }
+  .chip-skip b:hover { color: var(--red); }
+  .toggles { display: flex; flex-wrap: wrap; gap: 7px; }
+  .tog { cursor: pointer; user-select: none; font-size: 11.5px; padding: 7px 11px; border-radius: 8px; border: 1px solid var(--line); color: var(--ink-dim); background: rgba(255,255,255,0.015); display: inline-flex; align-items: center; gap: 7px; transition: all .15s; }
+  .tog .box { width: 13px; height: 13px; border-radius: 3px; border: 1px solid var(--ink-faint); display: grid; place-items: center; font-size: 9px; color: var(--bg); }
+  .tog.on { border-color: var(--green); color: var(--ink); }
+  .tog.on .box { background: var(--green); border-color: var(--green); }
+
+  /* ── Info icon + tooltip ─────────────────────────────────── */
+  .budget-opt-row { display: inline-flex; align-items: center; gap: 6px; }
+  .info-wrap { position: relative; display: inline-flex; align-items: center; }
+  .info-icon {
+    width: 16px; height: 16px; border-radius: 50%;
+    border: 1px solid var(--ink-faint); color: var(--ink-faint);
+    font-size: 9.5px; font-style: normal; font-weight: 700;
+    cursor: help; display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0; user-select: none; transition: border-color .15s, color .15s, box-shadow .15s;
+    line-height: 1;
+  }
+  .info-wrap:hover .info-icon { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 6px rgba(56,225,214,0.4); }
+  .info-tip {
+    display: none; position: fixed;
+    width: 270px; max-width: calc(100vw - 16px);
+    background: #0b1628; border: 1px solid var(--line);
+    border-radius: 10px; padding: 13px 15px;
+    font-size: 11.5px; line-height: 1.65; color: var(--ink);
+    z-index: 9999; box-shadow: 0 12px 32px rgba(0,0,0,0.7);
+    pointer-events: none; text-align: left; white-space: normal;
+  }
+  .info-tip::after {
+    content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+    border: 6px solid transparent; border-top-color: var(--line);
+  }
+  .info-tip.tip-flipped::after {
+    top: auto; bottom: 100%;
+    border-top-color: transparent; border-bottom-color: var(--line);
+  }
+  .info-tip b { color: var(--cyan); }
+  .info-tip code { font-family: var(--mono); font-size: 10.5px; background: rgba(56,225,214,0.09); border: 1px solid rgba(56,225,214,0.22); border-radius: 3px; padding: 0 4px; color: var(--cyan); }
+  .info-tip em { color: var(--green); font-style: normal; font-weight: 600; }
+  .info-tip .tip-row { display: flex; gap: 6px; margin: 4px 0; }
+  .info-tip .tip-row span:first-child { color: var(--amber); font-weight: 700; min-width: 18px; }
+
+  /* Scope panel */
+  .scope-meta { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; margin-bottom: 14px; }
+  @media (max-width: 700px) { .scope-meta { grid-template-columns: repeat(2, 1fr); } }
+  .scope-kv { background: rgba(0,0,0,0.25); border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; }
+  .scope-kv .klab { display: block; font-size: 10px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 3px; }
+  .scope-kv .kval { font-family: var(--mono); font-size: 12px; color: var(--cyan); word-break: break-all; }
+  .ftable { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 11.5px; }
+  .ftable th { text-align: left; color: var(--ink-faint); padding: 6px 10px; border-bottom: 1px solid var(--line); font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; font-family: var(--body); font-weight: 600; }
+  .ftable td { padding: 6px 10px; border-bottom: 1px dashed var(--line-soft); vertical-align: middle; }
+  .ftable tr:last-child td { border-bottom: none; }
+  .fst { display: inline-block; padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 10.5px; }
+  .fst-M { background: rgba(255,181,71,0.15); color: var(--amber); }
+  .fst-A { background: rgba(84,217,140,0.15); color: var(--green); }
+  .fst-D { background: rgba(255,107,107,0.15); color: var(--red); }
+  .fst-R { background: rgba(183,139,255,0.15); color: var(--violet); }
+  .fpath { color: var(--ink); max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fadd { color: var(--green); font-weight: 600; }
+  .fdel { color: var(--red); font-weight: 600; }
+  .frev-yes  { color: var(--green); font-size: 10.5px; }
+  .frev-skip { color: var(--ink-faint); font-size: 10.5px; font-style: italic; }
+  .prescan-bar { margin-top: 12px; padding: 9px 13px; background: rgba(255,181,71,0.07); border: 1px solid rgba(255,181,71,0.3); border-radius: 8px; font-size: 12px; color: var(--ink-dim); display: flex; align-items: center; gap: 9px; }
+  .prescan-bar b { color: var(--amber); }
+
+  /* ── Streaming plain-text view ──────────────────────────── */
+  .stream-pre {
+    background: #060e1a; border-radius: 9px; padding: 16px 18px;
+    font-family: var(--mono); font-size: 12px; line-height: 1.7;
+    white-space: pre-wrap; word-break: break-word; margin: 0;
+    color: var(--ink-dim);
+  }
+  .stream-hd {
+    display: flex; align-items: center; gap: 9px; margin-bottom: 10px;
+    font-family: var(--mono); font-size: 11px; color: var(--ink-faint);
+  }
+  .stream-hd .pulse-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--amber); box-shadow: 0 0 6px var(--amber);
+    animation: pulse-amber 1s infinite;
+  }
+
+  /* ── Markdown-rendered report ──────────────────────────── */
+  .report-md {
+    color: var(--ink); line-height: 1.75;
+    font-family: var(--body); font-size: 13.5px;
+  }
+  .report-md:empty::before { content: 'Waiting for review output…'; color: var(--ink-faint); font-family: var(--mono); font-size: 12.5px; }
+  .report-md h1,.report-md h2,.report-md h3,.report-md h4 { font-family: var(--display); text-transform: uppercase; letter-spacing: .08em; margin: 1.4em 0 .6em; }
+  .report-md h1 { font-size: 16px; color: var(--cyan); border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+  .report-md h2 { font-size: 14px; color: var(--blue); border-bottom: 1px dashed var(--line-soft); padding-bottom: 4px; }
+  .report-md h3 { font-size: 13px; color: var(--violet); }
+  .report-md h4 { font-size: 12px; color: var(--amber); }
+  .report-md table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 12.5px; margin: 14px 0; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+  .report-md thead { background: rgba(0,0,0,0.35); }
+  .report-md th { text-align: left; color: var(--ink-dim); padding: 9px 13px; border-bottom: 1px solid var(--line); font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; font-family: var(--body); font-weight: 600; }
+  .report-md td { padding: 8px 13px; border-bottom: 1px dashed var(--line-soft); vertical-align: top; }
+  .report-md tr:last-child td { border-bottom: none; }
+  .report-md tbody tr:hover { background: rgba(255,255,255,0.025); }
+  .report-md code { font-family: var(--mono); font-size: 12px; background: rgba(56,225,214,0.09); border: 1px solid rgba(56,225,214,0.22); border-radius: 4px; padding: 1px 5px; color: var(--cyan); }
+  .report-md pre { background: rgba(0,0,0,0.45); border: 1px solid var(--line); border-radius: 9px; padding: 14px 16px; overflow-x: auto; margin: 12px 0; }
+  .report-md pre code { background: none; border: none; padding: 0; color: var(--ink); font-size: 12.5px; }
+  .report-md ul,.report-md ol { padding-left: 24px; margin: 8px 0; }
+  .report-md li { margin: 4px 0; }
+  .report-md hr { border: none; border-top: 1px solid var(--line); margin: 20px 0; }
+  .report-md blockquote { border-left: 3px solid var(--amber); padding: 8px 16px; margin: 12px 0; color: var(--ink-dim); background: rgba(255,181,71,0.05); border-radius: 0 7px 7px 0; }
+  .report-md strong { color: var(--amber); font-weight: 700; }
+  .report-md em { color: var(--ink-dim); font-style: italic; }
+  .report-md a { color: var(--blue); text-underline-offset: 3px; }
+  .report-md p { margin: 8px 0; }
+
+  /* ── Clickable file links ─────────────────────────────────── */
+  .file-link {
+    cursor: pointer;
+    color: var(--cyan);
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-underline-offset: 3px;
+    transition: color .12s;
+  }
+  .file-link:hover { color: var(--blue); }
+  .report-md code.file-link-code {
+    cursor: pointer;
+    border-color: rgba(56,225,214,0.5);
+    transition: background .12s, border-color .12s;
+  }
+  .report-md code.file-link-code:hover {
+    background: rgba(56,225,214,0.22);
+    border-color: var(--cyan);
+  }
+
+  /* ── Awaiting approval banner ─────────────────────────── */
+  .await-banner {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 18px; margin-top: 20px;
+    background: rgba(56,225,214,0.06);
+    border: 1px solid rgba(56,225,214,0.4);
+    border-radius: 11px;
+    animation: fadeIn .4s ease;
+  }
+  .await-banner .aw-dot {
+    width: 10px; height: 10px; border-radius: 50%; flex: none;
+    background: var(--cyan); box-shadow: 0 0 10px var(--cyan);
+    animation: pulse-cyan 1.3s infinite;
+  }
+  .await-banner .aw-txt {
+    font-family: var(--display); font-size: 12px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--cyan); flex: 1;
+  }
+  .await-banner .aw-sub { font-size: 11px; color: var(--ink-dim); font-family: var(--body); text-transform: none; letter-spacing: 0; margin-top: 2px; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* ── Approval buttons ─────────────────────────────────── */
+  .approval-panel {
+    margin-top: 16px; padding: 18px 20px;
+    background: rgba(56,225,214,0.04);
+    border: 1px solid rgba(56,225,214,0.28); border-radius: 11px;
+  }
+  .approval-panel h3 {
+    font-family: var(--display); font-size: 11.5px; letter-spacing: .15em;
+    text-transform: uppercase; color: var(--cyan); margin: 0 0 13px;
+    display: flex; align-items: center; gap: 7px;
+  }
+  .appr-btns { display: flex; flex-wrap: wrap; gap: 9px; align-items: flex-end; }
+  .appr-btn { cursor: pointer; border: none; border-radius: 9px; padding: 10px 17px; font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: .06em; transition: filter .15s, transform .1s; }
+  .appr-btn:hover  { filter: brightness(1.1); transform: translateY(-1px); }
+  .appr-btn:active { transform: translateY(0); }
+  .btn-all  { background: var(--green); color: #06131b; }
+  .btn-sel  { background: var(--cyan);  color: #06131b; }
+  .btn-rev  { background: var(--amber); color: #06131b; }
+  .btn-stop { background: rgba(255,107,107,0.18); color: var(--red); border: 1px solid rgba(255,107,107,0.5); }
+  .sel-row { display: flex; gap: 7px; align-items: center; }
+  .sel-row input { width: 170px; }
+
+  /* ── Apply output section ─────────────────────────────── */
+  .apply-hd {
+    display: flex; align-items: center; gap: 9px; margin-bottom: 12px;
+    font-family: var(--display); font-size: 12px; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--ink-dim);
+  }
+  .apply-hd .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); }
+
+  /* ── Error box ────────────────────────────────────────── */
+  .err-box { margin-top: 14px; padding: 14px 16px; background: rgba(255,107,107,0.07); border: 1px solid rgba(255,107,107,0.4); border-radius: 10px; }
+  .err-box .err-title { font-family: var(--display); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--red); margin-bottom: 8px; }
+  .err-box pre { font-family: var(--mono); font-size: 12px; color: var(--ink-dim); white-space: pre-wrap; word-break: break-word; margin: 0; }
+  .retry-btn { margin-top: 12px; cursor: pointer; border: 1px solid rgba(255,107,107,0.5); background: rgba(255,107,107,0.12); color: var(--red); border-radius: 8px; padding: 8px 15px; font-family: var(--mono); font-size: 12px; font-weight: 600; transition: filter .15s; }
+  .retry-btn:hover { filter: brightness(1.2); }
+
+  footer { margin-top: 32px; text-align: center; color: var(--ink-faint); font-size: 11.5px; font-family: var(--mono); }
+
+  @media (max-width: 680px) {
+    :root { --sb-width: 0px; }
+    .sidebar { display: none; }
+    .main { margin-left: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="grain"></div>
+
+<!-- ═══ FIXED LEFT SIDEBAR ═══ -->
+<aside class="sidebar">
+
+  <!-- Header -->
+  <div class="sb-hd">
+    <div class="sb-logo-row">
+      <div class="sb-logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#38e1d6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2 L19 19 L12 15 L5 19 Z"/>
+        </svg>
+      </div>
+      <div class="sb-title">
+        <h1>Review <b>Pilot</b></h1>
+      </div>
+      <span class="badge">v1</span>
+    </div>
+    <p class="sb-hd-desc">Branch review by role · propose fixes · apply only after approval</p>
+  </div>
+
+  <!-- Server connection -->
+  <div class="sb-sec">
+    <div class="sb-sec-label"><span class="dot" style="background:var(--green);box-shadow:0 0 6px var(--green)"></span>Server</div>
+    <div class="srv-row">
+      <div class="srv-dot" id="srvIndicator"></div>
+      <span class="srv-label" id="srvLabel">Connecting…</span>
+    </div>
+    <div class="srv-cwd" id="srvCwd"></div>
+    <div class="srv-err-msg" id="srvErrMsg" style="display:none">
+      Server not found. Run <code style="color:var(--cyan)">/reviewpilot</code> in Claude Code chat, then reload.
+    </div>
+  </div>
+
+  <!-- Launch -->
+  <div class="sb-sec">
+    <button class="launch" id="run" disabled>▸ Start review</button>
+    <div class="hint" id="hint"></div>
+    <button class="stop-all" id="stopAll" disabled>◼ Stop server</button>
+  </div>
+
+  <!-- Live Status -->
+  <div class="sb-sec" style="flex:1">
+    <div class="sb-sec-label"><span class="dot" style="background:var(--violet);box-shadow:0 0 6px var(--violet)"></span>Live Status</div>
+    <ul class="steps" id="steps">
+      <li class="step" data-n="1">
+        <div class="mark">1</div>
+        <div class="body"><div class="t">Collect scope</div><div class="d">Resolve base ref &amp; filter files</div></div>
+      </li>
+      <li class="step" data-n="2">
+        <div class="mark">2</div>
+        <div class="body"><div class="t">AI review</div><div class="d">Claude analyses changed files</div></div>
+      </li>
+      <li class="step" data-n="3">
+        <div class="mark">3</div>
+        <div class="body"><div class="t">Report ready</div><div class="d">Severity-ranked issues + fixes</div></div>
+      </li>
+      <li class="step" data-n="7">
+        <div class="mark">4</div>
+        <div class="body"><div class="t">Apply fixes</div><div class="d">After explicit approval only</div></div>
+      </li>
+      <li class="step" data-n="8">
+        <div class="mark">5</div>
+        <div class="body"><div class="t">Done</div><div class="d">Summary of applied changes</div></div>
+      </li>
+    </ul>
+  </div>
+
+</aside>
+
+<!-- ═══ SCROLLABLE MAIN CONTENT ═══ -->
+<main class="main">
+
+  <!-- Form grid: inputs on left, budget on right -->
+  <div class="form-grid">
+
+    <!-- Flight plan -->
+    <div class="panel">
+      <div class="panel-hd"><span class="dot"></span> Flight plan — inputs</div>
+
+      <label class="fld">
+        <span class="lab">Developer role</span>
+        <div class="roles" id="roles">
+          <div class="role" data-role="UI Developer"><div class="ic">🎨</div><div class="nm">UI</div></div>
+          <div class="role" data-role="Backend Developer"><div class="ic">⚙️</div><div class="nm">Backend</div></div>
+          <div class="role" data-role="DB Developer"><div class="ic">🗄️</div><div class="nm">Database</div></div>
+          <div class="role" data-role="FullStack Developer"><div class="ic">🌐</div><div class="nm">FullStack</div></div>
+        </div>
+      </label>
+
+      <label class="fld">
+        <span class="lab">Extensions <em style="color:var(--ink-faint);text-transform:none;font-style:normal;font-size:10.5px">(preset + extra, comma separated)</em></span>
+        <input type="text" id="extInput" placeholder="e.g. .vue, .tsx" />
+        <div class="chips" id="chips"></div>
+        <div class="toggles" style="margin-top:9px">
+          <div class="tog" id="extOnly"><span class="box"></span> Only these extensions</div>
+        </div>
+      </label>
+
+      <label class="fld">
+        <span class="lab">Skip extensions <em style="color:var(--ink-faint);text-transform:none;font-style:normal;font-size:10.5px">(comma separated — these are always excluded)</em></span>
+        <input type="text" id="skipExtInput" placeholder="e.g. .spec.ts, .test.js, .min.js" />
+        <div class="chips" id="skipChips"></div>
+      </label>
+
+      <label class="fld">
+        <span class="lab">Base branch / ref</span>
+        <input type="text" id="base" value="QA" placeholder="main · develop · QA · origin/release" />
+      </label>
+
+      <label class="fld">
+        <span class="lab">Working tree</span>
+        <div class="toggles">
+          <div class="tog on" id="committed"><span class="box">✓</span> Include local changes (staged · unstaged · untracked)</div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px">
+          <div class="budget-opt-row">
+            <div class="tog" id="localOnly"><span class="box"></span> Local changes only</div>
+            <span class="info-wrap">
+              <span class="info-icon">i</span>
+              <span class="info-tip">
+                <b>Local Changes Only</b><br><br>
+                When enabled, only your current working-tree changes are reviewed — staged, unstaged, and untracked files vs HEAD. The full branch diff against the base branch is skipped.<br><br>
+                Useful for a quick review of uncommitted work before pushing.<br><br>
+                <em>Default: OFF — full branch diff reviewed</em>
+              </span>
+            </span>
+          </div>
+        </div>
+      </label>
+
+      <label class="fld">
+        <span class="lab">Extra prompt / focus <em style="color:var(--ink-faint);text-transform:none;font-style:normal">(optional)</em></span>
+        <textarea id="extra" placeholder="e.g. Pay attention to ::ng-deep deprecations and reuse SCSS variables."></textarea>
+      </label>
+    </div>
+
+    <!-- AI budget -->
+    <div class="panel">
+      <div class="panel-hd"><span class="dot" style="background:var(--amber);box-shadow:0 0 9px var(--amber)"></span> Review options</div>
+
+      <!-- Toggle: pre-scan -->
+      <div style="margin-bottom:10px">
+        <span class="lab" style="margin-bottom:7px;display:block">Analysis</span>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+
+          <div class="budget-opt-row">
+            <div class="tog on" id="prescan"><span class="box">✓</span> Code pattern pre-scan</div>
+            <span class="info-wrap">
+              <span class="info-icon">i</span>
+              <span class="info-tip">
+                <b>Code Pattern Pre-scan</b><br><br>
+                Before the AI runs, a fast script scans every changed line for common issues — at zero AI cost:<br><br>
+                <div class="tip-row"><span>•</span><span>Deprecated Angular <code>::ng-deep</code> / <code>/deep/</code></span></div>
+                <div class="tip-row"><span>•</span><span>Hardcoded SCSS colours when <code>$variables</code> exist</span></div>
+                <div class="tip-row"><span>•</span><span>Legacy <code>var</code>, loose <code>==</code>, <code>console.log</code></span></div>
+                <div class="tip-row"><span>•</span><span>jQuery usage in modern Angular stacks</span></div>
+                <div class="tip-row"><span>•</span><span>Missing doc comments on new exports</span></div>
+                <div class="tip-row"><span>•</span><span><code>SELECT *</code>, <code>NOLOCK</code>, <code>printStackTrace</code></span></div><br>
+                The AI then confirms or dismisses each candidate — saving credits by not discovering what a script already caught.<br><br>
+                <em>✓ Recommended: leave ON</em>
+              </span>
+            </span>
+          </div>
+
+          <div class="budget-opt-row">
+            <div class="tog on" id="diffs"><span class="box">✓</span> Include code diffs</div>
+            <span class="info-wrap">
+              <span class="info-icon">i</span>
+              <span class="info-tip">
+                <b>Include Code Diffs</b><br><br>
+                Attaches the actual git diff for each reviewed file (trimmed to ≈ 6 KB per file) directly inside the AI prompt.<br><br>
+                Without this, the AI only sees file names and change counts. With it, the AI can read the exact lines added or removed — producing much more precise findings and fix proposals.<br><br>
+                Turn OFF only if your branch has very large diffs and you are running into token-limit errors.<br><br>
+                <em>✓ Recommended: leave ON</em>
+              </span>
+            </span>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Toggle: chunking -->
+      <div style="margin-bottom:10px">
+        <span class="lab" style="margin-bottom:7px;display:block">Processing</span>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+          <div class="budget-opt-row">
+            <div class="tog" id="enableChunking"><span class="box"></span> Enable chunking</div>
+            <span class="info-wrap">
+              <span class="info-icon">i</span>
+              <span class="info-tip">
+                <b>Enable Chunking</b><br><br>
+                When enabled, large branch diffs are automatically split into sequential AI calls that share one review session, keeping each call within the token budget.<br><br>
+                When disabled (default), the entire diff is sent in a single AI call — best for most branches and produces a cleaner single-pass report.<br><br>
+                Turn ON only if you hit token-limit errors on a very large branch.<br><br>
+                <em>Default: OFF</em>
+              </span>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Max files -->
+      <label class="fld" style="margin-top:4px">
+        <span class="lab" style="display:flex;align-items:center;gap:6px">
+          Max files reviewed per run
+          <span class="info-wrap">
+            <span class="info-icon">i</span>
+            <span class="info-tip">
+              <b>Max Files Per Run</b><br><br>
+              Caps how many files the AI reviews in one session.<br><br>
+              <div class="tip-row"><span>0</span><span>No cap — review every changed file that matches the role/extensions filter <em>(default)</em></span></div>
+              <div class="tip-row"><span>10</span><span>Review only the first 10 matched files; the rest appear in the scope table as <code>deferred</code></span></div><br>
+              Useful when a branch touches dozens of files and you want a quick, cheaper first pass over the most critical changes.
+            </span>
+          </span>
+        </span>
+        <input type="text" id="maxFiles" value="0" inputmode="numeric" placeholder="0 = no cap" />
+      </label>
+
+      <p style="font-size:11px;color:var(--ink-faint);margin:8px 0 0;line-height:1.55">Pre-scan runs in milliseconds at no AI cost · diffs give the AI full context · together they make each review faster and cheaper.</p>
+    </div>
+
+  </div><!-- /form-grid -->
+
+  <!-- Scope panel (shown after collect-scope step) -->
+  <div id="scopeWrap" style="display:none; margin-top:22px">
+    <div class="panel">
+      <div class="panel-hd"><span class="dot" style="background:var(--green);box-shadow:0 0 9px var(--green)"></span> Scope — changed files</div>
+      <div class="scope-meta" id="scopeMeta"></div>
+      <div id="scopeTable"></div>
+      <div id="prescanBar"></div>
+    </div>
+  </div>
+
+  <!-- Review report panel -->
+  <div id="reportWrap" style="display:none; margin-top:22px">
+    <div class="panel">
+      <div class="panel-hd" id="reportPanelHd">
+        <span class="dot" style="background:var(--blue);box-shadow:0 0 9px var(--blue)"></span> Review report
+      </div>
+
+      <!-- content: during streaming shows plain pre; on done replaced with markdown -->
+      <div class="report-md" id="reportContent"></div>
+
+      <!-- Error box -->
+      <div id="errBox"></div>
+
+      <!-- Awaiting approval banner (shown when review done, before user acts) -->
+      <div id="awaitBanner" style="display:none">
+        <div class="await-banner">
+          <div class="aw-dot"></div>
+          <div>
+            <div class="aw-txt">Awaiting your approval</div>
+            <div class="aw-sub">Review the report above, then choose an action below.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Approval buttons -->
+      <div id="approvalWrap" style="display:none">
+        <div class="approval-panel">
+          <h3><span style="margin-right:5px">⬡</span> Apply changes</h3>
+          <div class="appr-btns">
+            <button class="appr-btn btn-all" id="btnAll">APPROVE ALL</button>
+            <div class="sel-row">
+              <input type="text" id="approveIds" placeholder="R-001, R-003…" />
+              <button class="appr-btn btn-sel" id="btnSel">APPROVE</button>
+            </div>
+            <button class="appr-btn btn-rev" id="btnRevise">REVISE</button>
+            <button class="appr-btn btn-stop" id="btnStop">STOP</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Apply output panel (shown after approval submitted) -->
+  <div id="applyWrap" style="display:none; margin-top:22px">
+    <div class="panel">
+      <div class="apply-hd"><span class="dot"></span> Apply output</div>
+      <div class="report-md" id="applyContent"></div>
+    </div>
+  </div>
+
+  <footer>Review Pilot · no files changed without explicit approval · commit / push / merge always require user confirmation</footer>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var SERVER = 'http://localhost:3922';
+  var sessionId = null;
+  var running = false;
+  var viewOnly = false;
+
+  function uiLog(level, message, data) {
+    fetch(SERVER + '/client-log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ level: level, message: message, data: data || {} })
+    }).catch(function () {});
+  }
+
+  var PRESETS = {
+    "UI Developer":        [".html",".htm",".js",".ts",".spec.ts",".json",".scss",".css",".less",".styl",".jsp",".properties",".native",".vue",".svelte"],
+    "Backend Developer":   [".java",".test",".xml",".yml",".yaml",".scala",".kt",".properties",".jsp",".tld",".wsdd",".xsd",".gradle"],
+    "DB Developer":        [".sql",".ddl",".dml",".pks",".pkb",".prc",".fnc",".tab",".vw",".trg",".pls",".plsql",".psql",".tsql"],
+    "FullStack Developer": [".html",".htm",".js",".ts",".spec.ts",".json",".scss",".css",".less",".styl",".native",".vue",".svelte",
+                            ".java",".test",".xml",".yml",".yaml",".scala",".kt",".properties",".jsp",".tld",".wsdd",".xsd",".gradle",
+                            ".sql",".ddl",".dml",".pks",".pkb",".prc",".fnc",".tab",".vw",".trg",".pls",".plsql",".psql",".tsql"]
+  };
+
+  var state = { role: "UI Developer", extra: [], skipExtra: [], extOnly: false, committed: true, prescan: true, diffs: true, enableChunking: false, localOnly: false };
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+  function escAttr(s) { return esc(s).replace(/"/g, '&quot;'); }
+
+  /* ── Open file in editor via server ────────────────────────── */
+  function openFile(filePath, line) {
+    uiLog('INFO', 'Open file in editor', { file: filePath, line: line });
+    fetch(SERVER + '/open-file', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file: filePath, line: parseInt(line, 10) || 1 })
+    }).catch(function () {});
+  }
+
+  /* ── Linkify file:line references inside rendered markdown ─── */
+  // file.ext:123  or  file.ext:123-456  or  file.ext:123, 456
+  var FILE_LINE_RE = /^([\w.\-/\\]+\.[a-zA-Z]{1,15}):(\d+)(?:[-,]\s*\d+)*$/;
+  // path/with/slash/file.ext  (path separators present)
+  var FILE_ONLY_RE = /^((?:[\w.\-]+[/\\])+[\w.\-]+\.[a-zA-Z]{1,15})$/;
+  // bare filename, no slash — only known source extensions to avoid false positives
+  var FILE_BARE_RE = /^([\w.\-]+\.(?:ts|tsx|js|mjs|jsx|html|htm|scss|sass|css|less|styl|json|xml|java|sql|yml|yaml|gradle|kt|py|rb|sh|properties|native|vue|svelte))$/i;
+  function linkifyFilePaths(container) {
+    container.querySelectorAll('code').forEach(function (el) {
+      if (el.closest('pre')) return; // skip fenced code blocks
+      var text = el.textContent.trim();
+      var m = FILE_LINE_RE.exec(text);
+      if (m) {
+        el.classList.add('file-link-code');
+        el.title = 'Open ' + m[1] + ':' + m[2] + ' in editor';
+        el.addEventListener('click', function () { openFile(m[1], parseInt(m[2], 10)); });
+        return;
+      }
+      var fm = FILE_ONLY_RE.exec(text) || FILE_BARE_RE.exec(text);
+      if (fm) {
+        el.classList.add('file-link-code');
+        el.title = 'Open ' + fm[1] + ' in editor';
+        el.addEventListener('click', function () { openFile(fm[1], 1); });
+      }
+    });
+  }
+
+  /* ── View-only mode (triggered after session completes or stop) */
+  function enterViewOnlyMode(label) {
+    viewOnly = true;
+    running = false;
+    fetch(SERVER + '/shutdown', { method: 'POST' }).catch(function () {});
+    $('srvIndicator').className = 'srv-dot done';
+    $('srvLabel').textContent = label || 'Session complete';
+    $('srvCwd').textContent = 'Server stopped — view-only mode';
+    $('srvErrMsg').style.display = 'none';
+    $('run').textContent = '◉ View only';
+    $('run').disabled = true;
+    $('stopAll').disabled = true;
+    setApprovalButtonsDisabled(false); // re-enable so they're not stuck disabled if shown
+  }
+
+  /* ── Disable / re-enable all approval action buttons ───────── */
+  function setApprovalButtonsDisabled(disabled) {
+    ['btnAll', 'btnSel', 'btnRevise', 'btnStop'].forEach(function(id) {
+      $(id).disabled = disabled;
+    });
+    var inp = $('approveIds'); if (inp) inp.disabled = disabled;
+  }
+
+  /* ── Server connection ─────────────────────────────────────── */
+  function checkServer() {
+    if (viewOnly) return;
+    fetch(SERVER + '/health', { method: 'GET' })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        $('srvIndicator').className = 'srv-dot ok';
+        $('srvLabel').textContent = 'Connected — localhost:3922';
+        $('srvCwd').textContent = 'Repo: ' + j.cwd;
+        $('srvErrMsg').style.display = 'none';
+        $('stopAll').disabled = false;
+        uiLog('INFO', 'Server health check OK', { cwd: j.cwd, pid: j.pid });
+        validate();
+      })
+      .catch(function (e) {
+        $('srvIndicator').className = 'srv-dot err';
+        $('srvLabel').textContent = 'Server not running';
+        $('srvCwd').textContent = '';
+        $('srvErrMsg').style.display = 'block';
+        $('run').disabled = true;
+        $('stopAll').disabled = true;
+        uiLog('WARN', 'Server health check failed', { error: e ? e.message : 'fetch failed' });
+      });
+  }
+
+  /* ── Form state ────────────────────────────────────────────── */
+  var roleEls = document.querySelectorAll('#roles .role');
+  function setRole(r) {
+    state.role = r;
+    roleEls.forEach(function (el) { el.classList.toggle('on', el.dataset.role === r); });
+    renderChips(); validate();
+  }
+  roleEls.forEach(function (el) { el.addEventListener('click', function () { setRole(el.dataset.role); }); });
+
+  function renderChips() {
+    var box = $('chips'); box.innerHTML = '';
+    var preset = state.extOnly ? [] : (PRESETS[state.role] || []);
+    var extras = state.extra.filter(function (e) { return preset.indexOf(e) === -1; });
+    var all = preset.concat(extras);
+
+    // Large presets (FullStack): show a single summary chip + only the user-added extras.
+    if (!state.extOnly && preset.length > 18) {
+      var sum = document.createElement('span');
+      sum.className = 'chip';
+      sum.style.cssText = 'background:rgba(56,225,214,0.07);border-color:rgba(56,225,214,0.28);color:var(--ink-dim);font-style:italic';
+      sum.textContent = preset.length + ' built-in types';
+      box.appendChild(sum);
+      extras.forEach(function(ext) {
+        var c = document.createElement('span'); c.className = 'chip';
+        c.innerHTML = esc(ext) + ' <b title="remove">×</b>';
+        c.querySelector('b').addEventListener('click', function () {
+          state.extra = state.extra.filter(function (x) { return x !== ext; });
+          renderChips(); validate();
+        });
+        box.appendChild(c);
+      });
+    } else {
+      all.forEach(function (ext) {
+        var isExtra = state.extra.indexOf(ext) !== -1;
+        var c = document.createElement('span');
+        c.className = 'chip';
+        c.innerHTML = esc(ext) + (isExtra ? ' <b title="remove">×</b>' : '');
+        if (isExtra) c.querySelector('b').addEventListener('click', function () {
+          state.extra = state.extra.filter(function (x) { return x !== ext; });
+          renderChips(); validate();
+        });
+        box.appendChild(c);
+      });
+    }
+    if (!all.length) {
+      var n = document.createElement('span');
+      n.style.cssText = 'color:var(--ink-faint);font-size:11.5px;font-family:var(--mono)';
+      n.textContent = 'no extensions yet — pick a role or type one';
+      box.appendChild(n);
+    }
+  }
+
+  function renderSkipChips() {
+    var box = $('skipChips'); box.innerHTML = '';
+    state.skipExtra.forEach(function(ext) {
+      var c = document.createElement('span');
+      c.className = 'chip chip-skip';
+      c.innerHTML = esc(ext) + ' <b title="remove">×</b>';
+      c.querySelector('b').addEventListener('click', function () {
+        state.skipExtra = state.skipExtra.filter(function (x) { return x !== ext; });
+        renderSkipChips();
+      });
+      box.appendChild(c);
+    });
+  }
+
+  $('extInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      var v = this.value.trim().replace(/,$/, '').toLowerCase();
+      if (v) {
+        if (v[0] !== '.') v = '.' + v;
+        if (state.extra.indexOf(v) === -1) state.extra.push(v);
+        this.value = ''; renderChips(); validate();
+      }
+    }
+  });
+
+  $('skipExtInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      var v = this.value.trim().replace(/,$/, '').toLowerCase();
+      if (v) {
+        if (v[0] !== '.') v = '.' + v;
+        if (state.skipExtra.indexOf(v) === -1) state.skipExtra.push(v);
+        this.value = ''; renderSkipChips();
+      }
+    }
+  });
+
+  function bindTog(id, key, onChange) {
+    var el = $(id);
+    el.addEventListener('click', function () {
+      state[key] = !state[key];
+      el.classList.toggle('on', state[key]);
+      el.querySelector('.box').textContent = state[key] ? '✓' : '';
+      if (onChange) onChange();
+      validate();
+    });
+  }
+  bindTog('extOnly', 'extOnly', renderChips);
+  bindTog('committed', 'committed');
+  bindTog('localOnly', 'localOnly');
+  bindTog('prescan', 'prescan');
+  bindTog('diffs', 'diffs');
+  bindTog('enableChunking', 'enableChunking');
+  $('base').addEventListener('input', validate);
+
+  function activeExtensions() {
+    var preset = state.extOnly ? [] : (PRESETS[state.role] || []);
+    return preset.concat(state.extra.filter(function (e) { return preset.indexOf(e) === -1; }));
+  }
+
+  function validate() {
+    var base = $('base').value.trim();
+    var exts = activeExtensions();
+    var srvOk = $('srvIndicator').classList.contains('ok');
+    var ok = !!base && exts.length > 0 && srvOk && !running;
+    $('run').disabled = !ok;
+    $('hint').textContent = !srvOk ? ''
+      : (!base ? 'A base branch is required.'
+      : (!exts.length ? 'Pick a role or add at least one extension.' : ''));
+  }
+
+  /* ── Steps ─────────────────────────────────────────────────── */
+  function setStep(n) {
+    document.querySelectorAll('.step').forEach(function (el) {
+      var en = parseInt(el.dataset.n, 10);
+      el.classList.remove('active', 'done', 'err', 'waiting');
+      if (en < n) el.classList.add('done');
+      else if (en === n) el.classList.add('active');
+    });
+  }
+  function markStepDone(n) {
+    var el = document.querySelector('.step[data-n="' + n + '"]');
+    if (el) { el.classList.remove('active', 'err', 'waiting'); el.classList.add('done'); el.querySelector('.mark').textContent = '✓'; }
+  }
+  function markStepErr(n) {
+    var el = document.querySelector('.step[data-n="' + n + '"]');
+    if (el) { el.classList.remove('active', 'done', 'waiting'); el.classList.add('err'); el.querySelector('.mark').textContent = '✗'; }
+  }
+  function markStepWaiting(n) {
+    var el = document.querySelector('.step[data-n="' + n + '"]');
+    if (el) { el.classList.remove('active', 'done', 'err'); el.classList.add('waiting'); }
+  }
+  function resetSteps() {
+    var nums = [1,2,3,4,5]; var i = 0;
+    document.querySelectorAll('.step').forEach(function (el) {
+      el.classList.remove('active','done','err','waiting');
+      el.querySelector('.mark').textContent = nums[i++] || '';
+    });
+  }
+
+  /* ── SSE reader ─────────────────────────────────────────────── */
+  function readSSE(response, onEvent) {
+    var reader = response.body.getReader();
+    var decoder = new TextDecoder();
+    var buf = '';
+
+    function pump() {
+      return reader.read().then(function (r) {
+        if (r.done) return;
+        buf += decoder.decode(r.value, { stream: true });
+        var blocks = buf.split('\n\n');
+        buf = blocks.pop();
+        blocks.forEach(function (block) {
+          if (!block.trim()) return;
+          var event = 'message', data = '';
+          block.split('\n').forEach(function (line) {
+            if (line.startsWith('event: ')) event = line.slice(7).trim();
+            if (line.startsWith('data: '))  data  = line.slice(6);
+          });
+          if (!data) return;
+          try { onEvent(event, JSON.parse(data)); } catch (_) {}
+        });
+        return pump();
+      });
+    }
+    return pump();
+  }
+
+  /* ── Scope panel ────────────────────────────────────────────── */
+  function showScope(s) {
+    $('scopeWrap').style.display = 'block';
+
+    $('scopeMeta').innerHTML = [
+      kv('Branch', s.current_branch || '—'),
+      kv('Base ref', s.base_ref || '—'),
+      kv('Merge base', (s.merge_base || '').slice(0, 8)),
+      kv('Files changed', s.files_changed || 0),
+      kv('Reviewed', s.files_reviewed || 0),
+      kv('Skipped', s.files_skipped || 0),
+    ].join('');
+
+    var files = s.files || [];
+    var rows = files.map(function (f) {
+      var stClass = 'fst fst-' + (f.status || 'M');
+      var addTd = f.additions > 0 ? '<span class="fadd">+' + f.additions + '</span>' : '<span style="color:var(--ink-faint)">—</span>';
+      var delTd = f.deletions > 0 ? '<span class="fdel">−' + f.deletions + '</span>' : '<span style="color:var(--ink-faint)">—</span>';
+      var revTd = f.reviewed
+        ? '<span class="frev-yes">✓ reviewed</span>'
+        : '<span class="frev-skip">skipped: ' + esc(f.reason_if_skipped || '') + '</span>';
+      return '<tr>'
+        + '<td><span class="' + stClass + '">' + esc(f.status || 'M') + '</span></td>'
+        + '<td class="fpath" title="' + escAttr(f.path) + '"><span class="file-link" data-file="' + escAttr(f.path) + '" data-line="1">' + esc(f.path) + '</span></td>'
+        + '<td>' + addTd + '</td>'
+        + '<td>' + delTd + '</td>'
+        + '<td>' + revTd + '</td>'
+        + '</tr>';
+    }).join('');
+
+    $('scopeTable').innerHTML = files.length
+      ? '<table class="ftable"><thead><tr><th></th><th>File</th><th>+</th><th>−</th><th>Review status</th></tr></thead><tbody>' + rows + '</tbody></table>'
+      : '<p style="color:var(--ink-faint);font-size:12px;margin:0">No files matched the extension filter.</p>';
+
+    var findings = s.prescan_findings || [];
+    $('prescanBar').innerHTML = findings.length
+      ? '<div class="prescan-bar">⬡ Pre-scan found <b>' + findings.length + ' candidate issue' + (findings.length === 1 ? '' : 's') + '</b> — AI review will confirm or dismiss each one.</div>'
+      : '';
+  }
+
+  function kv(label, value) {
+    return '<div class="scope-kv"><span class="klab">' + esc(label) + '</span><span class="kval">' + esc(String(value)) + '</span></div>';
+  }
+
+  /* ── Report output (review) ─────────────────────────────────── */
+  var reportEl = $('reportContent');
+  var reportBuffer = '';
+  var reportFinal = false;
+
+  /* During streaming: show plain text to avoid broken partial-markdown.
+     On done: replace with fully rendered markdown (clean, no mid-parse artefacts). */
+  function appendReport(text) {
+    reportBuffer += text;
+    if (reportFinal) {
+      renderReportMarkdown();
+    } else {
+      reportEl.innerHTML =
+        '<div class="stream-hd"><span class="pulse-dot"></span>Streaming review…</div>'
+        + '<pre class="stream-pre">' + esc(reportBuffer) + '</pre>';
+      reportEl.scrollTop = reportEl.scrollHeight;
+    }
+  }
+
+  function cleanReportMarkdown(md) {
+    // Strip any preamble prose before the first markdown heading
+    var firstHeading = md.search(/^#{1,6}\s/m);
+    if (firstHeading > 0) md = md.slice(firstHeading);
+    // If the scope panel is visible, strip the duplicate Scope + Changed-files sections.
+    // Keep only the main title + everything from "Issues found" onwards.
+    if ($('scopeWrap').style.display !== 'none') {
+      var issuesIdx = md.search(/^#{1,4}\s+Issues\s+found/mi);
+      if (issuesIdx > 0) {
+        var titleMatch = md.match(/^(#{1,3}[^\n]+)/);
+        md = (titleMatch ? titleMatch[0] + '\n\n' : '') + md.slice(issuesIdx);
+      }
+    }
+    return md;
+  }
+
+  function renderReportMarkdown() {
+    var md = cleanReportMarkdown(reportBuffer);
+    reportEl.innerHTML = (typeof marked !== 'undefined')
+      ? marked.parse(md)
+      : '<pre style="white-space:pre-wrap;font-family:var(--mono);font-size:12.5px">' + esc(md) + '</pre>';
+    linkifyFilePaths(reportEl);
+    reportEl.scrollTop = 0;
+  }
+
+  /* ── Apply output (after approval) ──────────────────────────── */
+  var applyEl = $('applyContent');
+  var applyBuffer = '';
+  var applyFinal = false;
+
+  function appendApply(text) {
+    applyBuffer += text;
+    if (applyFinal) {
+      renderApplyMarkdown();
+    } else {
+      applyEl.innerHTML =
+        '<div class="stream-hd"><span class="pulse-dot"></span>Applying…</div>'
+        + '<pre class="stream-pre">' + esc(applyBuffer) + '</pre>';
+      applyEl.scrollTop = applyEl.scrollHeight;
+    }
+  }
+
+  function renderApplyMarkdown() {
+    applyEl.innerHTML = (typeof marked !== 'undefined')
+      ? marked.parse(applyBuffer)
+      : '<pre style="white-space:pre-wrap;font-family:var(--mono);font-size:12.5px">' + esc(applyBuffer) + '</pre>';
+    linkifyFilePaths(applyEl);
+    applyEl.scrollTop = 0;
+  }
+
+  /* ── Clear / reset ───────────────────────────────────────────── */
+  function clearAll() {
+    reportBuffer = ''; reportFinal = false; reportEl.innerHTML = '';
+    applyBuffer  = ''; applyFinal  = false; applyEl.innerHTML  = '';
+    $('errBox').innerHTML = '';
+    sessionId = null;
+    $('awaitBanner').style.display  = 'none';
+    $('approvalWrap').style.display = 'none';
+    $('reportWrap').style.display   = 'none';
+    $('applyWrap').style.display    = 'none';
+    $('scopeWrap').style.display    = 'none';
+  }
+
+  function showError(text, retryFn) {
+    var box = $('errBox');
+    box.innerHTML = '<div class="err-box"><div class="err-title">Error</div><pre>' + esc(text) + '</pre></div>';
+    if (retryFn) {
+      var btn = document.createElement('button');
+      btn.className = 'retry-btn';
+      btn.textContent = '↺ Retry';
+      btn.addEventListener('click', retryFn);
+      box.querySelector('.err-box').appendChild(btn);
+    }
+  }
+
+  /* ── Review flow ────────────────────────────────────────────── */
+  var lastParams = null;
+
+  $('run').addEventListener('click', function () {
+    if (running || $('run').disabled) return;
+    lastParams = {
+      role: state.role,
+      base: $('base').value.trim(),
+      extraExtensions: state.extra.slice(),
+      extOnly: state.extOnly,
+      skipExtensions: state.skipExtra.slice(),
+      committedOnly: !state.committed,
+      localOnly: state.localOnly,
+      prescan: state.prescan,
+      diffs: state.diffs,
+      enableChunking: state.enableChunking,
+      maxFiles: parseInt($('maxFiles').value, 10) || 0,
+      extra: $('extra').value.trim()
+    };
+    startReview(lastParams);
+  });
+
+  function startReview(params) {
+    if (!$('srvIndicator').classList.contains('ok')) {
+      clearAll();
+      $('reportWrap').style.display = 'block';
+      showError(
+        'Server not running.\nRun /reviewpilot in Claude Code, then reload this page and retry.',
+        function () { startReview(params); }
+      );
+      return;
+    }
+    clearAll();
+    resetSteps();
+    running = true; $('run').textContent = '▸ Running…'; $('run').disabled = true;
+    setApprovalButtonsDisabled(true);
+    $('reportWrap').style.display = 'block';
+    uiLog('INFO', 'Review fetch started', {
+      base: params.base, role: params.role,
+      extensions: params.extraExtensions, extOnly: params.extOnly,
+      skipExtensions: params.skipExtensions,
+      committedOnly: params.committedOnly, localOnly: params.localOnly,
+      prescan: params.prescan, diffs: params.diffs,
+      enableChunking: params.enableChunking, maxFiles: params.maxFiles
+    });
+
+    fetch(SERVER + '/review', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params)
+    }).then(function (res) {
+      if (!res.ok) return res.text().then(function (t) { throw new Error('Server error: ' + t); });
+      setStep(1);
+      return readSSE(res, handleReviewEvent);
+    }).catch(function (e) {
+      uiLog('ERROR', 'Review fetch error', { error: e.message });
+      showError(e.message, function () { startReview(lastParams); });
+      markStepErr(1);
+      finishRunning();
+    });
+  }
+
+  function handleReviewEvent(event, data) {
+    uiLog('INFO', 'SSE event: ' + event, { dataKeys: Object.keys(data) });
+    if (event === 'step') {
+      setStep(data.n);
+    } else if (event === 'scope') {
+      markStepDone(1);
+      showScope(data.data);
+    } else if (event === 'chunk') {
+      appendReport(data.text);
+    } else if (event === 'result') {
+      if (data.sessionId) sessionId = data.sessionId;
+    } else if (event === 'error') {
+      uiLog('ERROR', 'Review SSE error event', { text: data.text });
+      showError(data.text, function () { startReview(lastParams); });
+      markStepErr(1);
+    } else if (event === 'log') {
+      var t = (data.text || '').toLowerCase();
+      if (t.indexOf('error') !== -1 && t.indexOf('warning') === -1) {
+        showError(data.text);
+      }
+    } else if (event === 'done') {
+      if (data.sessionId) sessionId = data.sessionId;
+      uiLog('INFO', 'Review done', { code: data.code, hasSessionId: !!sessionId });
+      if (data.code === 0) {
+        // Render the complete buffer as clean markdown now that it's fully received
+        reportFinal = true;
+        renderReportMarkdown();
+        markStepDone(2); markStepDone(3);
+        if (sessionId) {
+          // Show "awaiting" state in sidebar step 4 + banner above approval buttons
+          markStepWaiting(7);
+          $('awaitBanner').style.display  = 'block';
+          $('approvalWrap').style.display = 'block';
+          setApprovalButtonsDisabled(false);
+          // Scroll to the approval section
+          $('awaitBanner').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          // Keep button disabled with a waiting label — re-enabled only after user acts
+          running = false;
+          $('run').textContent = '⏸ Awaiting approval…';
+          $('run').disabled = true;
+        } else {
+          finishRunning();
+        }
+      } else {
+        markStepErr(2);
+        if (!$('errBox').innerHTML) {
+          showError('Review exited with code ' + data.code + '. Check server logs.', function () { startReview(lastParams); });
+        }
+        finishRunning();
+      }
+    }
+  }
+
+  function finishRunning() {
+    running = false;
+    $('run').textContent = '▸ Start review';
+    validate();
+  }
+
+  /* ── Approval flow ──────────────────────────────────────────── */
+  $('btnAll').addEventListener('click',  function () { sendApproval('APPROVE ALL'); });
+  $('btnStop').addEventListener('click', function () { sendApproval('STOP'); });
+  $('btnRevise').addEventListener('click', function () {
+    var msg = window.prompt('Describe what you want revised:');
+    if (msg) sendApproval('REVISE: ' + msg);
+  });
+  $('btnSel').addEventListener('click', function () {
+    var ids = $('approveIds').value.trim();
+    if (!ids) { $('approveIds').focus(); return; }
+    sendApproval('APPROVE ' + ids);
+  });
+
+  function sendApproval(approval) {
+    if (!sessionId) return;
+    uiLog('INFO', 'Approval submitted', { approval: approval, sessionId: sessionId });
+    setApprovalButtonsDisabled(true);
+    // Hide the awaiting banner and approval buttons — user has decided
+    $('awaitBanner').style.display  = 'none';
+    $('approvalWrap').style.display = 'none';
+    $('errBox').innerHTML = '';
+    running = true; $('run').textContent = '▸ Applying…'; $('run').disabled = true;
+    setStep(7);
+
+    // Show the apply output section
+    $('applyWrap').style.display = 'block';
+    $('applyWrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    fetch(SERVER + '/approve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: sessionId, approval: approval })
+    }).then(function (res) {
+      return readSSE(res, handleApplyEvent);
+    }).catch(function (e) {
+      uiLog('ERROR', 'Approval fetch error', { error: e.message });
+      showError(e.message);
+      markStepErr(7);
+      finishRunning();
+    });
+  }
+
+  function handleApplyEvent(event, data) {
+    uiLog('INFO', 'Apply SSE event: ' + event, { dataKeys: Object.keys(data) });
+    if (event === 'chunk') {
+      appendApply(data.text);
+    } else if (event === 'result') {
+      // sessionId not needed here; text already accumulated via chunk events
+    } else if (event === 'error') {
+      uiLog('ERROR', 'Apply SSE error event', { text: data.text });
+      showError(data.text);
+      markStepErr(7);
+    } else if (event === 'done') {
+      uiLog('INFO', 'Apply done', { code: data.code });
+      if (data.code === 0) {
+        applyFinal = true;
+        renderApplyMarkdown();
+        markStepDone(7); setStep(8); markStepDone(8);
+        finishRunning();
+        enterViewOnlyMode();
+      } else {
+        markStepErr(7);
+        finishRunning();
+      }
+    }
+  }
+
+  /* ── Stop server button ─────────────────────────────────────── */
+  $('stopAll').addEventListener('click', function () {
+    if (viewOnly) return;
+    var confirmed = window.confirm(
+      'Stop Review Pilot?\n\n' +
+      'This will immediately kill all running AI processes and shut down the server.\n\n' +
+      'Any review in progress will be cancelled. The current output stays visible in view-only mode.'
+    );
+    if (!confirmed) return;
+
+    uiLog('INFO', 'Stop Server confirmed by user');
+    // Kill all running procs server-side then exit
+    fetch(SERVER + '/kill', { method: 'POST' }).catch(function () {});
+
+    // Update UI immediately — don't wait for server response
+    running = false;
+    $('awaitBanner').style.display  = 'none';
+    $('approvalWrap').style.display = 'none';
+    setApprovalButtonsDisabled(false);
+    enterViewOnlyMode('Stopped by user');
+  });
+
+  /* ── Init ───────────────────────────────────────────────────── */
+  // Event delegation for scope table file links (innerHTML is replaced on each review)
+  $('scopeTable').addEventListener('click', function (e) {
+    var link = e.target.closest('.file-link[data-file]');
+    if (link) openFile(link.dataset.file, parseInt(link.dataset.line, 10) || 1);
+  });
+
+  renderChips(); renderSkipChips(); setRole('UI Developer'); checkServer();
+  setInterval(function () { if (!running) checkServer(); }, 8000);
+
+  /* ── Tooltip positioning (fixed, avoids overflow clipping) ─── */
+  document.querySelectorAll('.info-wrap').forEach(function (wrap) {
+    var tip = wrap.querySelector('.info-tip');
+    if (!tip) return;
+    wrap.addEventListener('mouseenter', function () {
+      var icon = wrap.querySelector('.info-icon');
+      var rect = icon.getBoundingClientRect();
+      var tipW = 270;
+      // Temporarily show off-screen to measure height
+      tip.style.left = '-9999px';
+      tip.style.top = '-9999px';
+      tip.style.display = 'block';
+      tip.classList.remove('tip-flipped');
+      var tipH = tip.offsetHeight;
+      // Center horizontally on icon, appear above by default
+      var left = rect.left + rect.width / 2 - tipW / 2;
+      var top  = rect.top - tipH - 10;
+      left = Math.max(8, Math.min(window.innerWidth - tipW - 8, left));
+      if (top < 8) {
+        top = rect.bottom + 10;
+        tip.classList.add('tip-flipped');
+      }
+      tip.style.left = left + 'px';
+      tip.style.top  = top + 'px';
+    });
+    wrap.addEventListener('mouseleave', function () {
+      tip.style.display = 'none';
+    });
+  });
+
+})();
+</script>
+</body>
+</html>

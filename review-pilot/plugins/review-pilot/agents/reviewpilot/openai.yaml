@@ -1,0 +1,7 @@
+interface:
+  display_name: "Review Pilot"
+  short_description: "Review a whole branch by role (UI / Java / DB) or extensions, neglect merge commits, propose behaviour-preserving fixes, and apply only after approval."
+  default_prompt: "$reviewpilot Review all changes done by the UI developer against the QA base branch, identify issues, propose fixes, and take input from user to apply safe fixes."
+  brand_color: "#38E1D6"
+policy:
+  allow_implicit_invocation: true
