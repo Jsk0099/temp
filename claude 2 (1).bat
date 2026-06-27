@@ -80,6 +80,7 @@ echo [STEP] Writing parse.ps1... >> "!LOGFILE!"
     echo }
     echo [System.IO.File]::WriteAllBytes('!TMPD!\sid.txt', $enc.GetBytes($sid^)^)
     echo [System.IO.File]::WriteAllBytes('!TMPD!\res.txt', $enc.GetBytes($res^)^)
+    echo if ($res^) { Write-Host $res } else { Write-Host "(no response)" }
 ) > "!TMPD!\parse.ps1"
 
 if not exist "!TMPD!\parse.ps1" (
@@ -164,31 +165,11 @@ set PS_EXIT=!errorlevel!
 echo [PARSE] PowerShell exit code: !PS_EXIT! >> "!LOGFILE!"
 
 set "SESSION="
-set /p SESSION=<"!TMPD!\sid.txt" 2>nul
+for /f "usebackq delims=" %%A in ("!TMPD!\sid.txt") do set "SESSION=%%A"
 echo [PARSE] Session ID: !SESSION! >> "!LOGFILE!"
 
-if not exist "!TMPD!\res.txt" (
-    echo [PARSE] res.txt missing >> "!LOGFILE!"
-    echo (no response file - something went wrong)
-    goto loop
-)
-
-for %%F in ("!TMPD!\res.txt") do (
-    echo [PARSE] res.txt size: %%~zF bytes >> "!LOGFILE!"
-    if %%~zF==0 (
-        echo.
-        echo (no response - check that claude CLI is logged in)
-        echo [PARSE] Empty response >> "!LOGFILE!"
-        goto loop
-    )
-)
-
-echo [PARSE] Displaying response... >> "!LOGFILE!"
-type "!TMPD!\res.txt"
-echo.
-
 echo [%date% %time%] Claude: >> "!LOGFILE!"
-type "!TMPD!\res.txt" >> "!LOGFILE!"
+type "!TMPD!\res.txt" >> "!LOGFILE!" 2>nul
 echo. >> "!LOGFILE!"
 echo [PARSE] Done, looping >> "!LOGFILE!"
 
