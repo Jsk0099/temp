@@ -3,14 +3,25 @@
 /**
  * Claude Code connection and communication layer.
  *
- * Thin wrapper around the official @anthropic-ai/claude-code SDK `query()`.
- * The SDK owns process spawning, binary resolution, stdin/stdout wiring, and
- * NDJSON parsing — this module only bakes in ReviewPilot's permission policy
- * (bypassPermissions + DISALLOWED_TOOLS) and adapts the SDK message stream to
- * the SSE contract server.js expects.
+ * Spawns the official Claude Code native binary (shipped by
+ * @anthropic-ai/claude-code) directly and parses its --output-format=stream-json
+ * NDJSON stream.  This module bakes in ReviewPilot's permission policy
+ * (bypassPermissions + DISALLOWED_TOOLS) and adapts the message stream to the
+ * SSE contract server.js expects.
  *
- * No API key is required: the bundled Claude Code CLI authenticates from the
- * existing logged-in session (OAuth / VS Code extension), same as before.
+ * Why spawn the binary instead of importing query()?
+ * ──────────────────────────────────────────────────
+ * @anthropic-ai/claude-code v2.x is a CLI-binary-only package — it has no
+ * `main`/`exports` and exports NO query() function (the JS SDK moved to a
+ * separate package).  `import('@anthropic-ai/claude-code')` therefore fails or
+ * yields no query(), which broke ReviewPilot inconsistently across machines
+ * (perceived as "Windows-only").  Resolving the per-platform native binary and
+ * spawning its absolute path works identically on Windows, macOS and Linux —
+ * spawning the real .exe sidesteps the .cmd/.ps1 shell-shim problems Windows
+ * hits with PATH-based launches.
+ *
+ * No API key is required: the native CLI authenticates from the existing
+ * logged-in session (OAuth / VS Code extension), same as before.
  *
  * streamClaudeCore / streamClaude are server.js-compatible wrappers.
  *
@@ -20,6 +31,10 @@
  * edits without interrupting the user per-action.  DISALLOWED_TOOLS still
  * hard-blocks all destructive git / filesystem operations.
  */
+
+const { spawn } = require('child_process');
+const path = require('path');
+const os = require('os');
 
 // ── Disallowed tools ──────────────────────────────────────────────────────────
 // Hard-blocked regardless of permission mode.  Claude may never commit, push,
@@ -42,64 +57,120 @@ const DISALLOWED_TOOLS = [
   'Bash(rmdir *)',
 ];
 
-// ── SDK loader ────────────────────────────────────────────────────────────────
-// @anthropic-ai/claude-code is ESM-first; this module is CommonJS, so we load it
-// via a cached dynamic import() (works whether the package is ESM-only or dual).
+// ── Native binary resolution ────────────────────────────────────────────────
+// Resolve the per-platform binary package the same way the official wrapper
+// does (incl. linux musl/glibc).  Falls back to PATH 'claude'/'claude.exe'.
 
-var _sdkQueryPromise = null;
-
-function loadSdkQuery() {
-  if (!_sdkQueryPromise) {
-    _sdkQueryPromise = import('@anthropic-ai/claude-code').then(function (mod) {
-      var fn = mod.query || (mod.default && mod.default.query);
-      if (typeof fn !== 'function') {
-        throw new Error('@anthropic-ai/claude-code did not export query()');
-      }
-      return fn;
-    });
+function getPlatformKey() {
+  const platform = process.platform;
+  const arch = os.arch();
+  if (platform === 'linux') {
+    const report = typeof process.report?.getReport === 'function'
+      ? process.report.getReport()
+      : null;
+    const isMusl = !!report && report.header && report.header.glibcVersionRuntime === undefined;
+    return 'linux-' + arch + (isMusl ? '-musl' : '');
   }
-  return _sdkQueryPromise;
+  // win32-x64, win32-arm64, darwin-arm64, darwin-x64, ...
+  return platform + '-' + arch;
 }
 
-// ── query() — async generator ─────────────────────────────────────────────────
-//
-// Delegates to the SDK's query(), baking in ReviewPilot's permission policy.
-//
-//   for await (const msg of query({ prompt, options })) {
-//     if (msg.type === 'assistant') { /* streaming text blocks */ }
-//     if (msg.type === 'result')    { /* final result + session_id */ }
-//   }
-//
-// Options accepted (mapped to the SDK option names):
-//   cwd                string         — working directory for the Claude process
-//   resume             string         — session ID to resume
-//   permissionMode     string         — default 'bypassPermissions'
-//   disallowedTools    string[]       — merged with DISALLOWED_TOOLS
-//   appendSystemPrompt string         — appended to Claude's system prompt
-//   abortController    AbortController — abort() stops the run
-//
-// Yields the SDK's typed message objects.  Aborting throws an AbortError from
-// the SDK generator; callers (streamClaudeCore) handle that.
+function getClaudeBinaryPath() {
+  const binName = process.platform === 'win32' ? 'claude.exe' : 'claude';
+  const pkgName = '@anthropic-ai/claude-code-' + getPlatformKey();
+  try {
+    const pkgJsonPath = require.resolve(pkgName + '/package.json');
+    return path.join(path.dirname(pkgJsonPath), binName);
+  } catch {
+    return binName; // Package not installed for this platform — try PATH
+  }
+}
 
-async function* query({ prompt: promptText, options = {} }) {
-  var sdkQuery = await loadSdkQuery();
+// ── runClaude — spawn the binary, parse stream-json, drive callbacks ──────────
+//
+// Builds the CLI invocation from ReviewPilot's options and the native binary's
+// stream-json output (identical message shapes to the old SDK stream):
+//   { type: 'assistant', message: { content: [{type:'text', text}] } }
+//   { type: 'result', result, session_id, is_error, subtype }
+//
+// The prompt is fed via stdin (not a positional arg) so large review prompts
+// never hit Windows' command-line length limit and never collide with the
+// variadic --disallowedTools parsing.
+//
+// onMessage(msg) is called per parsed NDJSON object.  Returns a handle with
+// .abort() (kills the process) so /kill can stop the run.
 
-  var extraDenied = Array.isArray(options.disallowedTools) ? options.disallowedTools : [];
-  var allDenied = DISALLOWED_TOOLS.concat(
-    extraDenied.filter(function (t) { return DISALLOWED_TOOLS.indexOf(t) === -1; })
-  );
+function runClaude(opts, onMessage) {
+  const args = [
+    '--print',
+    '--output-format', 'stream-json',
+    '--verbose',
+    '--permission-mode', opts.permissionMode || 'bypassPermissions',
+  ];
 
-  var sdkOptions = {
-    cwd:                    options.cwd || process.cwd(),
-    permissionMode:         options.permissionMode || 'bypassPermissions',
-    disallowedTools:        allDenied,
-    includePartialMessages: true,
+  if (DISALLOWED_TOOLS.length) {
+    args.push('--disallowedTools', DISALLOWED_TOOLS.join(','));
+  }
+  if (opts.resume) {
+    args.push('--resume', opts.resume);
+  }
+  if (opts.appendSystemPrompt) {
+    args.push('--append-system-prompt', opts.appendSystemPrompt);
+  }
+
+  const proc = spawn(getClaudeBinaryPath(), args, {
+    cwd: opts.cwd || process.cwd(),
+    env: { ...process.env },
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+
+  // Feed the prompt over stdin and close it.  Swallow EPIPE: if the binary
+  // fails to spawn, the 'error' event below handles it — the stdin write must
+  // not throw an unhandled stream error.
+  proc.stdin.on('error', () => {});
+  proc.stdin.write(opts.prompt || '');
+  proc.stdin.end();
+
+  let buffer = '';
+  let stderrOutput = '';
+
+  function consume(line) {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    try {
+      onMessage(JSON.parse(trimmed));
+    } catch {
+      // Ignore non-JSON output (e.g. banner text)
+    }
+  }
+
+  proc.stdout.on('data', (chunk) => {
+    buffer += chunk.toString('utf8');
+    const lines = buffer.split('\n');
+    buffer = lines.pop(); // keep last incomplete line
+    for (const line of lines) consume(line);
+  });
+
+  proc.stderr.on('data', (chunk) => {
+    stderrOutput += chunk.toString('utf8');
+  });
+
+  const done = new Promise((resolve, reject) => {
+    proc.on('error', (err) => {
+      reject(new Error('Failed to start Claude process: ' + err.message));
+    });
+    proc.on('close', (code) => {
+      if (buffer.trim()) consume(buffer); // flush final line
+      resolve({ code: code, stderr: stderrOutput });
+    });
+  });
+
+  const handle = { done: done, aborted: false };
+  handle.abort = function () {
+    handle.aborted = true;
+    try { proc.kill(); } catch (_) { /* already dead */ }
   };
-  if (options.resume)             sdkOptions.resume             = options.resume;
-  if (options.appendSystemPrompt) sdkOptions.appendSystemPrompt = options.appendSystemPrompt;
-  if (options.abortController)    sdkOptions.abortController     = options.abortController;
-
-  yield* sdkQuery({ prompt: promptText || '', options: sdkOptions });
+  return handle;
 }
 
 // ── SSE helper ────────────────────────────────────────────────────────────────
@@ -112,72 +183,76 @@ function sseWrite(res, event, data) {
 
 // ── streamClaudeCore — server.js-compatible wrapper ──────────────────────────
 //
-// Drives query() and pipes events to an SSE response.
+// Spawns the binary and pipes events to an SSE response.
 // Returns Promise<{ code, sessionId, responseBytes }> — same contract as before.
-// liveProcs holds AbortControllers; /kill calls controller.abort().
+// liveProcs holds run handles; /kill calls handle.abort().
 
 function streamClaudeCore(fixedArgs, promptText, res, addSystemPrompt, log, liveProcs, systemPrompt, repoCwd) {
   // Extract --resume sessionId from the legacy fixedArgs array.
   var resumeIdx = fixedArgs.indexOf('--resume');
   var resumeId  = resumeIdx !== -1 ? fixedArgs[resumeIdx + 1] : undefined;
 
-  var abortCtrl = new AbortController();
-  if (liveProcs) liveProcs.add(abortCtrl);
-
   var opts = {
-    cwd:             repoCwd,
-    permissionMode:  'bypassPermissions',
-    disallowedTools: [],        // DISALLOWED_TOOLS already baked in inside query()
-    abortController: abortCtrl,
+    prompt:         promptText || '',
+    cwd:            repoCwd,
+    permissionMode: 'bypassPermissions',
   };
-  if (resumeId)                          opts.resume             = resumeId;
-  if (addSystemPrompt && systemPrompt)   opts.appendSystemPrompt = systemPrompt;
+  if (resumeId)                        opts.resume             = resumeId;
+  if (addSystemPrompt && systemPrompt) opts.appendSystemPrompt = systemPrompt;
 
   var sessionId     = null;
   var responseBytes = 0;
   var exitCode      = 0;
 
-  var stream = query({ prompt: promptText, options: opts });
+  var handle = runClaude(opts, function (msg) {
+    if (msg.session_id) sessionId = msg.session_id;
 
-  return (async function() {
+    if (msg.type === 'assistant') {
+      var content = msg.message && msg.message.content;
+      if (Array.isArray(content)) {
+        for (var k = 0; k < content.length; k++) {
+          var block = content[k];
+          if (block.type === 'text' && block.text) {
+            responseBytes += block.text.length;
+            if (log) log.info('Claude chunk received', { bytes: block.text.length });
+            sseWrite(res, 'chunk', { text: block.text });
+          }
+        }
+      }
+    }
+
+    if (msg.type === 'result') {
+      sessionId = msg.session_id || sessionId;
+      // The CLI signals failure via is_error / non-success subtype.
+      if (msg.is_error || (msg.subtype && msg.subtype !== 'success')) {
+        exitCode = 1;
+      }
+      var resultText = msg.result || '';
+      responseBytes += resultText.length;
+      sseWrite(res, 'result', { text: msg.result, sessionId: sessionId });
+      if (log) log.info('AI review complete', {
+        sessionId: sessionId,
+        resultLength: resultText.length,
+        totalResponseBytes: responseBytes,
+      });
+    }
+  });
+
+  if (liveProcs) liveProcs.add(handle);
+
+  return (async function () {
     try {
-      for await (var msg of stream) {
-        if (msg.session_id) sessionId = msg.session_id;
-
-        if (msg.type === 'assistant') {
-          var content = msg.message && msg.message.content;
-          if (Array.isArray(content)) {
-            for (var k = 0; k < content.length; k++) {
-              var block = content[k];
-              if (block.type === 'text' && block.text) {
-                responseBytes += block.text.length;
-                if (log) log.info('Claude chunk received', { bytes: block.text.length });
-                sseWrite(res, 'chunk', { text: block.text });
-              }
-            }
-          }
-        }
-
-        if (msg.type === 'result') {
-          sessionId = msg.session_id || sessionId;
-          // SDK signals failure via is_error / non-success subtype instead of
-          // a process exit code.
-          if (msg.is_error || (msg.subtype && msg.subtype !== 'success')) {
-            exitCode = 1;
-          }
-          var resultText = msg.result || '';
-          responseBytes += resultText.length;
-          sseWrite(res, 'result', { text: msg.result, sessionId: sessionId });
-          if (log) log.info('AI review complete', {
-            sessionId: sessionId,
-            resultLength: resultText.length,
-            totalResponseBytes: responseBytes,
-          });
-        }
+      var outcome = await handle.done;
+      // Non-zero exit with no result message → surface the failure.
+      if (outcome.code !== 0 && exitCode === 0) {
+        exitCode = 1;
+        var errMsg = (outcome.stderr || '').trim() || ('Claude exited with code ' + outcome.code);
+        if (log) log.error('Claude stream error', { error: errMsg });
+        sseWrite(res, 'log', { text: 'Claude error: ' + errMsg });
       }
     } catch (err) {
       // Intentional /kill abort: stop quietly, no error SSE.
-      if (abortCtrl.signal.aborted) {
+      if (handle.aborted) {
         exitCode = 1;
         if (log) log.info('Claude stream aborted', { sessionId: sessionId });
       } else {
@@ -186,7 +261,7 @@ function streamClaudeCore(fixedArgs, promptText, res, addSystemPrompt, log, live
         exitCode = 1;
       }
     } finally {
-      if (liveProcs) liveProcs.delete(abortCtrl);
+      if (liveProcs) liveProcs.delete(handle);
     }
 
     if (log) {
@@ -207,7 +282,7 @@ function streamClaudeCore(fixedArgs, promptText, res, addSystemPrompt, log, live
  */
 function streamClaude(fixedArgs, promptText, res, addSystemPrompt, log, liveProcs, systemPrompt, repoCwd) {
   streamClaudeCore(fixedArgs, promptText, res, addSystemPrompt, log, liveProcs, systemPrompt, repoCwd)
-    .then(function(result) {
+    .then(function (result) {
       sseWrite(res, 'done', { code: result.code, sessionId: result.sessionId });
       if (!res.writableEnded) res.end();
     });
@@ -216,8 +291,8 @@ function streamClaude(fixedArgs, promptText, res, addSystemPrompt, log, liveProc
 // ── Exports ───────────────────────────────────────────────────────────────────
 
 module.exports = {
-  DISALLOWED_TOOLS: DISALLOWED_TOOLS,
-  query:            query,
-  streamClaudeCore: streamClaudeCore,
-  streamClaude:     streamClaude,
+  DISALLOWED_TOOLS:    DISALLOWED_TOOLS,
+  getClaudeBinaryPath: getClaudeBinaryPath,
+  streamClaudeCore:    streamClaudeCore,
+  streamClaude:        streamClaude,
 };

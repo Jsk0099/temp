@@ -1,0 +1,15 @@
+{
+  "name": "test-claude-comminication",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "Express server that communicates with Claude CLI via @anthropic-ai/claude-code",
+  "dependencies": {
+    "@anthropic-ai/claude-code": "^2.1.191",
+    "express": "^5.2.1"
+  }
+}

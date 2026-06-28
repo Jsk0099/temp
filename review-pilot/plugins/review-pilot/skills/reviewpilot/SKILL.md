@@ -17,7 +17,12 @@ drives the complete review without any further chat interaction.
 Run this command and capture its output:
 
 ```bash
-bash "${HOME:-$USERPROFILE}/.claude/agents/reviewpilot/scripts/launch.sh"
+_SCRIPTS="${HOME:-$USERPROFILE}/.claude/agents/reviewpilot/scripts"
+if [ "${OS:-}" = "Windows_NT" ]; then
+  cmd.exe /c "${_SCRIPTS}/launch.bat"
+else
+  bash "${_SCRIPTS}/launch.sh"
+fi
 ```
 
 ---
